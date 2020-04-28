@@ -1,4 +1,4 @@
-СПОВМ ЛР4 (Linux)
+СПОВМ ЛР5 (Linux)
 ----
 
 How to run?
@@ -23,11 +23,17 @@ After cmake succeded, go back to project folder
 cd ..
 ```
 
-and build binaries
+then build shared library
 
 ```bash
-cmake --build ./cmake-build --target all -j 2
+cmake --build ./cmake-build --target evilasyncio
 ```
 
-`0004` binary will be stored in `build/` directory.
+and program binary
+
+```bash
+cmake --build ./cmake-build --target handler
+```
+
+`handler` binary and `libevilasyncio.so` shared object will be stored in `build/` directory.
 
