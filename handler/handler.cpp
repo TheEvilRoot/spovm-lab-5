@@ -99,8 +99,7 @@ void chmod(const std::string &file_name) {
 
 void *reader_thread_handler(void *args) {
   auto *payload = static_cast<payload_t *>(args);
-  auto files = get_files(payload->directory_path);
-  if (!files.empty()) {
+  if (auto files = get_files(payload->directory_path); !files.empty()) {
     for (const auto &file_name : files) {
       auto name = file_name.c_str();
       auto file = open(name, O_RDONLY);
@@ -115,7 +114,9 @@ void *reader_thread_handler(void *args) {
 
       do {
         fprintf(stderr, "%03lu\r", chunk_size + offset);
-        auto chunk = std::string(read_chunk(file, chunk_size, offset, &reader_work_mutex));
+				auto chunk_str = read_chunk(file, chunk_size, offset, &reader_work_mutex);
+        auto chunk = std::string(chunk_str);
+				delete[] chunk_str;
         fprintf(stderr, "%03lu\r", chunk.size() + offset);
         pthread_mutex_lock(&buffer_mutex);
         global_buffer = std::string(chunk);
@@ -138,22 +139,22 @@ void *reader_thread_handler(void *args) {
 
 void *writer_thread_handler(void *args) {
   auto *payload = static_cast<payload_t *>(args);
-  auto file = open(payload->output_file_path.c_str(), O_WRONLY | O_CREAT | O_APPEND);
-  if (file < 0) {
-    printf("failed to open output file\n");
-    return nullptr;
-  }
-  while (true) {
-    pthread_mutex_lock(&need_writer_mutex);
-    pthread_mutex_lock(&buffer_mutex);
-    auto buffer = std::string(global_buffer);
-    append_chunk(file, buffer.data(), buffer.size(), &writer_work_mutex);
-    pthread_mutex_unlock(&buffer_mutex);
-    if (pthread_mutex_trylock(&writer_death_mutex) == 0)
-      break;
-  }
-  close(file);
-  chmod(payload->output_file_path);
+  if (auto file = open(payload->output_file_path.c_str(), O_WRONLY | O_CREAT | O_APPEND); file >= 0) {
+		while (true) {
+			pthread_mutex_lock(&need_writer_mutex);
+			pthread_mutex_lock(&buffer_mutex);
+			auto buffer = std::string(global_buffer);
+			append_chunk(file, buffer.data(), buffer.size(), &writer_work_mutex);
+			pthread_mutex_unlock(&buffer_mutex);
+			if (pthread_mutex_trylock(&writer_death_mutex) == 0)
+				break;
+		}
+		close(file);
+		chmod(payload->output_file_path);
+		printf("writer done\n");
+	} else {
+		printf("failed to open output file\n");
+	}
   sem_post(&done_semaphore);
   return nullptr;
 }
@@ -201,6 +202,8 @@ int main(const int argc, const char* argv_s[]) {
   pthread_mutex_destroy(&buffer_mutex);
   pthread_mutex_destroy(&need_writer_mutex);
   sem_destroy(&done_semaphore);
+
+	delete payload;
 
   return 0;
 }
