@@ -66,7 +66,7 @@ auto get_args(const int argc, const char * argv_s[]) {
 
   if (args.size() < 2) {
     printf("Invalid arguments\n");
-    printf("Use ./%s <directory> <output_file_path>\n", argv_s[0]);
+    printf("Use %s <directory> <output_file_path>\n", argv_s[0]);
     exit(1);
   }
 
