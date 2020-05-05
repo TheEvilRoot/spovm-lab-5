@@ -85,6 +85,7 @@ auto get_files(const std::string &path) {
       if (entry->d_type == DT_REG)
         files.push_back(base_path + std::string(entry->d_name));
     }
+    free(dir);
   }
   return files;
 }
@@ -134,6 +135,7 @@ void *reader_thread_handler(void *args) {
   }
   sem_post(&done_semaphore);
   pthread_mutex_unlock(&writer_death_mutex);
+  pthread_mutex_unlock(&need_writer_mutex);
   return nullptr;
 }
 
@@ -142,12 +144,12 @@ void *writer_thread_handler(void *args) {
   if (auto file = open(payload->output_file_path.c_str(), O_WRONLY | O_CREAT | O_APPEND); file >= 0) {
 		while (true) {
 			pthread_mutex_lock(&need_writer_mutex);
-			pthread_mutex_lock(&buffer_mutex);
+      if (pthread_mutex_trylock(&writer_death_mutex) == 0)
+        break;
+      pthread_mutex_lock(&buffer_mutex);
 			auto buffer = std::string(global_buffer);
 			append_chunk(file, buffer.data(), buffer.size(), &writer_work_mutex);
 			pthread_mutex_unlock(&buffer_mutex);
-			if (pthread_mutex_trylock(&writer_death_mutex) == 0)
-				break;
 		}
 		close(file);
 		chmod(payload->output_file_path);
