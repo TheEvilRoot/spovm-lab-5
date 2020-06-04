@@ -34,10 +34,19 @@ pthread_mutex_t writer_death_mutex;
 
 pthread_mutex_t buffer_mutex;
 pthread_mutex_t need_writer_mutex;
+pthread_mutex_t writer_working;
 
 sem_t done_semaphore;
 
 std::string global_buffer;
+
+void rlog(const char *s) {
+  fprintf(stderr, "reader:\t%s\n", s);
+}
+
+void wlog(const char *s) {
+  fprintf(stderr, "writer:\t%s\n", s);
+}
 
 template<typename Function>
 auto get_function(shared_library_t lib, const char *name) {
@@ -90,14 +99,6 @@ auto get_files(const std::string &path) {
   return files;
 }
 
-void rm(const std::string &file_name) {
-  system((std::string("rm -rf ") + file_name).c_str());
-}
-
-void chmod(const std::string &file_name) {
-  system((std::string("chmod 755 ") + file_name).c_str());
-}
-
 void *reader_thread_handler(void *args) {
   auto *payload = static_cast<payload_t *>(args);
   if (auto files = get_files(payload->directory_path); !files.empty()) {
@@ -110,15 +111,15 @@ void *reader_thread_handler(void *args) {
       }
       fprintf(stderr, "%s\n", name);
 
-      size_t chunk_size = 128;
+      size_t chunk_size = 16;
       size_t offset = 0;
 
       do {
-        fprintf(stderr, "%03lu\r", chunk_size + offset);
+        pthread_mutex_lock(&writer_working);
+        pthread_mutex_unlock(&writer_working);
 				auto chunk_str = read_chunk(file, chunk_size, offset, &reader_work_mutex);
         auto chunk = std::string(chunk_str);
 				delete[] chunk_str;
-        fprintf(stderr, "%03lu\r", chunk.size() + offset);
         pthread_mutex_lock(&buffer_mutex);
         global_buffer = std::string(chunk);
         pthread_mutex_unlock(&buffer_mutex);
@@ -127,7 +128,6 @@ void *reader_thread_handler(void *args) {
           break;
         offset += chunk_size;
       } while (true);
-      fprintf(stderr, "\n");
       close(file);
     }
   } else {
@@ -141,18 +141,19 @@ void *reader_thread_handler(void *args) {
 
 void *writer_thread_handler(void *args) {
   auto *payload = static_cast<payload_t *>(args);
-  if (auto file = open(payload->output_file_path.c_str(), O_WRONLY | O_CREAT | O_APPEND); file >= 0) {
+  if (auto file = open(payload->output_file_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0775); file >= 0) {
 		while (true) {
 			pthread_mutex_lock(&need_writer_mutex);
+      pthread_mutex_lock(&writer_working);
       if (pthread_mutex_trylock(&writer_death_mutex) == 0)
         break;
       pthread_mutex_lock(&buffer_mutex);
 			auto buffer = std::string(global_buffer);
 			append_chunk(file, buffer.data(), buffer.size(), &writer_work_mutex);
 			pthread_mutex_unlock(&buffer_mutex);
+      pthread_mutex_unlock(&writer_working);
 		}
 		close(file);
-		chmod(payload->output_file_path);
 		printf("writer done\n");
 	} else {
 		printf("failed to open output file\n");
@@ -161,33 +162,35 @@ void *writer_thread_handler(void *args) {
   return nullptr;
 }
 
+void create_mutex(pthread_mutex_t *mutex, bool lock = false) {
+  pthread_mutex_init(mutex, nullptr);
+  if (lock)
+    pthread_mutex_lock(mutex);
+}
+
+void rewrite_if_exists(const std::string &file) {
+  if (auto fd = open(file.c_str(), O_WRONLY | O_TRUNC, 0775); fd >= 0) {
+    close(fd);
+  } else {
+    fprintf(stderr, "rewrite: file does not exists\n");
+  }
+}
+
 int main(const int argc, const char* argv_s[]) {
   auto [directory_path, output_file_path] = get_args(argc, argv_s);
   load_library();
-
-  pthread_mutex_init(&writer_work_mutex, nullptr);
-  pthread_mutex_lock(&writer_work_mutex);
-
-  pthread_mutex_init(&reader_work_mutex, nullptr);
-  pthread_mutex_lock(&reader_work_mutex);
-
-  pthread_mutex_init(&writer_ready_mutex, nullptr);
-  pthread_mutex_lock(&writer_ready_mutex);
-
-  pthread_mutex_init(&writer_death_mutex, nullptr);
-  pthread_mutex_lock(&writer_death_mutex);
-
-  pthread_mutex_init(&buffer_mutex, nullptr);
-
-  pthread_mutex_init(&need_writer_mutex, nullptr);
-  pthread_mutex_lock(&need_writer_mutex);
-
+  create_mutex(&writer_working);
+  create_mutex(&writer_work_mutex, true);
+  create_mutex(&reader_work_mutex, true);
+  create_mutex(&writer_ready_mutex, true);
+  create_mutex(&writer_death_mutex, true);
+  create_mutex(&buffer_mutex);
+  create_mutex(&need_writer_mutex, true);
   sem_init(&done_semaphore, 0, 0);
 
-  rm(output_file_path);
+  rewrite_if_exists(output_file_path);
 
   auto *payload = new payload_t { directory_path, output_file_path };
-
   pthread_t reader_thread{};
   pthread_t writer_thread{};
 
@@ -203,6 +206,7 @@ int main(const int argc, const char* argv_s[]) {
   pthread_mutex_destroy(&writer_death_mutex);
   pthread_mutex_destroy(&buffer_mutex);
   pthread_mutex_destroy(&need_writer_mutex);
+  pthread_mutex_destroy(&writer_working);
   sem_destroy(&done_semaphore);
 
 	delete payload;
