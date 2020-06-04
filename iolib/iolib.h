@@ -1,7 +1,3 @@
-//
-// Created by theevilroot on 28.04.2020.
-//
-
 #ifndef SPOVM_LAB_5_EVILASYNCIO_H
 #define SPOVM_LAB_5_EVILASYNCIO_H
 

@@ -1,6 +1,3 @@
-//
-// Created by theevilroot on 28.04.2020.
-//
 #include <cstdio>
 #include <vector>
 #include <string>
@@ -60,8 +57,8 @@ auto get_function(shared_library_t lib, const char *name) {
 }
 
 void load_library() {
-  if ((async_io = dlopen("./libevilasyncio.so", RTLD_LAZY)) == nullptr) {
-    printf("failed to load libevilasyncio.so\n");
+  if ((async_io = dlopen("./libio.so", RTLD_LAZY)) == nullptr) {
+    printf("failed to load libio.so\n");
     exit(2);
   }
   append_chunk = get_function<chunk_append_t>(async_io, "append_chunk");

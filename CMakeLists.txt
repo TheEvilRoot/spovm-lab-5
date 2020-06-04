@@ -5,6 +5,6 @@ set(CMAKE_CXX_FLAGS "-fsanitize=address -Werror")
 
 project(0005)
 
-add_subdirectory(evilasyncio)
+add_subdirectory(iolib)
 add_subdirectory(handler)
 
