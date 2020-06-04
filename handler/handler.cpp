@@ -153,6 +153,7 @@ void *writer_thread_handler(void *args) {
 			pthread_mutex_unlock(&buffer_mutex);
       pthread_mutex_unlock(&writer_working);
 		}
+    fsync(file);
 		close(file);
 		printf("writer done\n");
 	} else {
