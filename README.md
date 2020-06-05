@@ -79,7 +79,7 @@ This function take file descriptor, bytes buffer, buffer size and working mutex,
 
 #### Warning
 
-Before both operations mutexes must be locked. After operation complete it **will** be unlocked.
+Before both operations mutexes must be unlocked. After operation complete it **will** be unlocked.
 
 Also, not recommended to use common mutex with both operations (such behaviour is not tested).
 
