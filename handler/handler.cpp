@@ -192,7 +192,7 @@ void rewrite_if_exists(const std::string &file) {
 int main(const int argc, const char* argv_s[]) {
   auto [directory_path, output_file_path] = get_args(argc, argv_s);
   load_library();
-  
+
   create_mutex(&writer_work_mutex, true);
   create_mutex(&reader_work_mutex, true);
   create_mutex(&writer_ready_mutex, true);
